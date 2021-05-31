@@ -55,10 +55,9 @@ def scrapeCycle(lnk) :
         count = 0
         atag = i["href"]            # retrieved all the links
         if (atag != ' '):           # check if the href attribute is not an empty element and perform only if it has content in it        
-                if (Validlnk(atag) and  not alreadyExists(atag)):       #Function calls to validate url as well as check whether url previously exists
-                    
+                if (Validlnk(atag) and  not alreadyExists(atag)):       #Function calls to validate url as well as check whether url previously exists        
                     records.insert_one({"Link": atag, "time":datetime.today().replace(microsecond=0)})
-                    print("Inserted link")                  
+                    print("Inserted link")
                     count += 1
 
                 #link = {"lnk":"https://flinkhub.com/"}
@@ -68,10 +67,10 @@ def scrapeCycle(lnk) :
                 ##link2 = [{'cbjsab':'gh'},{'ahdujhn':'fg'}]
                 ##records.insert_many(link2)
                 ###insert_many method to insert multiple documents                    
-        if (count==0):
+        elif (count==0):
             print("All links crawled")
         
-        if records.count_documents({}) >= 5000:
+        elif records.count_documents({}) >= 5000:
             print("Maximum limit reached")
 time.sleep(5)
 
@@ -84,8 +83,7 @@ if __name__ == '__main__' :
         #define the sourceLink
 
         scrapeCycle(link)
-        
-        while True:                  
+        while True:        
                 with ThreadPoolExecutor(max_workers = 7) as exec1:                        #ThreadPoolExecutor is library in python which is used to implement multithreading
                     exec1.submit(scrapeCycle)
                     #call to function 'scrapeCycle(link)'
