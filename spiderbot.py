@@ -84,9 +84,9 @@ if __name__ == '__main__' :
 
         scrapeCycle(link)
         while True:        
-                with ThreadPoolExecutor(max_workers = 7) as exec1:                        #ThreadPoolExecutor is library in python which is used to implement multithreading
-                    exec1.submit(scrapeCycle)
-                    #call to function 'scrapeCycle(link)'
+      ##          with ThreadPoolExecutor(max_workers = 7) as exec1:                        #ThreadPoolExecutor is library in python which is used to implement multithreading
+      ##               exec1.submit(scrapeCycle)
+                    # call to function 'scrapeCycle(link)'
 
 cnt2 = records.count_documents({})
 print('Count after insertion:',cnt2)
