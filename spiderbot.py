@@ -37,7 +37,7 @@ def Validlnk(sourceLink) :
 #function to check whether particular link already exists
 def alreadyExists(lnk):
     try :
-        filtr =(list(records.find({"Link":lnk})))
+        filtr =(list(records.find({"Link":lnk},{"time": {"$gte": time24HoursAgo()}})))
         #finding a particular document providing key value pair using find_one method
         #finding all the documents using find method so this becomes an iterator and using type conversion to list we get
         #a list of iterative objects  
@@ -47,7 +47,7 @@ def alreadyExists(lnk):
     except :
          return False
     
-def scrapeCycle() :
+def scrapeCycle(lnk) :
     soup = bs(lnk.text, 'html.parser')          # Create a BeautifulSoup object& parsing all html tags using html.parser
     atags = soup.find_all("a", href=True)       # finding all anchor tags having href attribute
 
@@ -55,9 +55,11 @@ def scrapeCycle() :
         count = 0
         atag = i["href"]            # retrieved all the links
         if (atag != ' '):           # check if the href attribute is not an empty element and perform only if it has content in it        
-                if (Validlnk(atag) and  not alreadyExists(atag)):       #Function calls to validate url as well as check whether url previously exists        
-                    records.insert_one({"Link": atag, "createdAt":datetime.today().replace(microsecond=0)})
-                    print("Inserted link")
+                if (Validlnk(atag) and  not alreadyExists(atag)):       #Function calls to validate url as well as check whether url previously exists
+                    
+                    records.insert_one({"Link": atag, "time":datetime.today().replace(microsecond=0)})
+                    print("Inserted link")                  
+                    count += 1
 
                 #link = {"lnk":"https://flinkhub.com/"}
                 #insert_one method to insert one single document
@@ -74,19 +76,19 @@ def scrapeCycle() :
 time.sleep(5)
 
 #main() function to start execution
-if __name__ == '__main__' :
-        
+if __name__ == '__main__' :       
         url = "https://flinkhub.com/"
         link = requests.get(url)
         print("Flinkhub Link:",link.url)
-        print("Html Tags:",link.text)   #define the sourceLink
+        print("Html Tags:",link.text)
+        #define the sourceLink
 
-
-        while True:        
-                with ThreadPoolExecutor(max_workers = 7) as exec1:                        
-                #ThreadPoolExecutor is library in python which is used to implement multithreading
+        scrapeCycle(link)
+        
+        while True:                  
+                with ThreadPoolExecutor(max_workers = 7) as exec1:                        #ThreadPoolExecutor is library in python which is used to implement multithreading
                     exec1.submit(scrapeCycle)
-                    #call to function 'scrapeCycle()'
+                    #call to function 'scrapeCycle(link)'
 
 cnt2 = records.count_documents({})
 print('Count after insertion:',cnt2)
