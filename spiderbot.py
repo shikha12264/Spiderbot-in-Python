@@ -1,6 +1,7 @@
 import requests
 import validators
 import time
+import uuid
 from datetime import datetime, timedelta
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup as bs    # using allias bs
@@ -8,88 +9,130 @@ from pymongo import MongoClient
 from concurrent.futures import ThreadPoolExecutor
 import dns
 
-client = MongoClient("mongodb+srv://test:test@cluster0.0del1.mongodb.net/myFirstDatabase?retryWrites=true&w=majority")
-# Connection to Mongodb
-# accessing MongoDB Atlas with pymongo MongoClient
-# creating an instance of Mongoclient
 
-db = client.get_database('shikha_db')
-#connecting to my database 'shikha_db' using get_database through object 'db'
-# now db is an reference of shikha_db databsse
+def db_conn():
+    client = MongoClient("mongodb+srv://test:<password>@cluster0.0del1.mongodb.net/myFirstDatabase?retryWrites=true&w=majority")
+    # Connection to Mongodb
+    # accessing MongoDB Atlas with pymongo MongoClient
+    # creating an instance of Mongoclient
+    db = client.get_database('shikha_db')
+    #connecting to my database 'shikha_db' using get_database through object 'db'
+    # now db is an reference of shikha_db databsse
+    collection = db.web_scraper
+    # testing collection connection
+    # connecting to the collection (web_scraper) via db object (shikha_db)
+    return collection
+    cnt = records.count_documents({})
+    if cnt >= 5000:
+        print("Maximum limit Reached")
+    print('Count before Insertion:',cnt)
+    #count_documents is a method to get the count of documents under
+    #collections(records)
 
-records = db.web_scraper
-# testing collection connection
-# connecting to the collection (web_scraper) via db object (shikha_db)
 
-cnt = records.count_documents({})
-print('Count before Insertion:',cnt)
-#count_documents is a method to get the count of documents under
-#collections(records)
+def write_html(lnk):
+    response = requests.get(lnk)                                         
+    f = open("Html", "wb")                                               #Open a new file for writing
+    f.write(response.content)                                            #write content in the file
+    f.close()
 
-#validate an URL by checking whether a particular url returns a valid response or not
-def Validlnk(sourceLink) :
-    try:
-        response = requests.get(sourceLink)
+def already_exists(url, collection):
+    data = collection.find({ "Link": url})
+    for d in data:                                                        # check for already existing links
         return True
-    except:
-        return False
+    return False
 
-#function to check whether particular link already exists
-def alreadyExists(lnk):
-    try :
-        filtr =(list(records.find({"Link":lnk},{"time": {"$gte": time24HoursAgo()}})))
-        #finding a particular document providing key value pair using find_one method
-        #finding all the documents using find method so this becomes an iterator and using type conversion to list we get
-        #a list of iterative objects  
-        if records.count_documents(filtr) > 0 :
-        #check if any such list exists previously i.e. if count is great than 0 , return true
-            return True                   
-    except :
-         return False
+def Insert_lnk(url, collection, source_Link):
+    try:
+        res = requests.get(url)
+        if not already_exists(res.url, collection):
+            soup = BeautifulSoup(res.content, 'html5lib')                       # Create a BeautifulSoup object& parsing all html tags using html.parser
+            random_file = ''.join(random.choices(string.ascii_uppercase + string.digits, k = 10))        
+            with open('htmlFiles/{}.html'.format(random_file), 'w', encoding="utf-8") as file:
+                file.write(soup.prettify())
+            file_path = ((os.path.dirname(__file__)) + '\htmlFiles\{}.html'.format(random_file)) 
+            lnk = {
+                'Link': res.url,
+                'Source_Link': source_Link,
+                'Is_Crawled': False,
+                'Last_Crawl_Dt': '',
+                'Created_at': datetime.now()
+            }
+            collection.insert_one(lnk)
+            print(res.url)
+    except Exception as error:
+        print(error)
+        pass
     
-def scrapeCycle(lnk) :
-    soup = bs(lnk.text, 'html.parser')          # Create a BeautifulSoup object& parsing all html tags using html.parser
-    atags = soup.find_all("a", href=True)       # finding all anchor tags having href attribute
+ # function for links which hasnt been inserted
+def notins_lnk(collection):
+    links = collection.find({"$or": [{"Is_Crawled": False},{"Last_Crawl_Dt":{ "$lt": datetime.now() - timedelta(days=1)}}]})
+    return links
 
-    for i in atags:
-        count = 0
-        atag = i["href"]            # retrieved all the links
-        if (atag != ' '):           # check if the href attribute is not an empty element and perform only if it has content in it        
-                if (Validlnk(atag) and  not alreadyExists(atag)):       #Function calls to validate url as well as check whether url previously exists        
-                    records.insert_one({"Link": atag, "time":datetime.today().replace(microsecond=0)})
-                    print("Inserted link")
-                    count += 1
+# function to update the document
+def modify_coll(document, collection):
+    collection.update_one({ "_id": document["_id"]}, { "$set": {
+        'Is_Crawled': True,
+        'Last_Crawl_Dt': datetime.now()
+    }})
 
-                #link = {"lnk":"https://flinkhub.com/"}
-                #insert_one method to insert one single document
-                #records.insert_one(link)
+ #function to crawl links
+def crawl(document, collection):
+    modify_coll(document, collection)
+    response = getResponse(document["Link"], 10)
+    links = getValidLinks(response)
+    for link in links:
+        if documentCount(collection) >=5000:
+            raise Exception("Maximum Limit Reached")
+        Insert_lnk(link, collection, document["Link"])
 
-                ##link2 = [{'cbjsab':'gh'},{'ahdujhn':'fg'}]
-                ##records.insert_many(link2)
-                ###insert_many method to insert multiple documents                    
-        elif (count==0):
-            print("All links crawled")
-        
-        elif records.count_documents({}) >= 5000:
-            print("Maximum limit reached")
-time.sleep(5)
 
-#main() function to start execution
+#function to validate links
+def getValidLinks(response):
+    links = []
+    soup = BeautifulSoup(response.content, 'html5lib')
+    href = soup.find_all('a', href = True)
+
+    for href in href:
+        if href.get('href').startswith("#") or href.get('href').startswith("tel:") or href.get('href').startswith("javascript:;") or href.get('href').startswith(" "):
+            continue
+
+        if href.get('href').startswith("https://") or href.get('href').startswith("http://"):
+            links.append(href.get('href'))
+            continue
+
+        if href.get('href').startswith("/"):
+            temp_url = response.url
+            temp_index = find_index(temp_url)
+            newurl = temp_url.replace(temp_url[temp_index:],"") + href.get('href').replace("/","")
+            links.append(newurl)
+    
+    return links
+
+#main() function 
 if __name__ == '__main__' :       
-        url = "https://flinkhub.com/"
-        link = requests.get(url)
-        print("Flinkhub Link:",link.url)
-        print("Html Tags:",link.text)
-        #define the sourceLink
+        url = "https://flinkhub.com/"             #define the sourceLink
+        write_html(url)
+        collection = db_conn()
+        Insert_lnk(url, collection, "")
 
-        scrapeCycle(link)
-        while True:        
-      ##          with ThreadPoolExecutor(max_workers = 7) as exec1:                        #ThreadPoolExecutor is library in python which is used to implement multithreading
-      ##               exec1.submit(scrapeCycle)
-                    # call to function 'scrapeCycle(link)'
-
-cnt2 = records.count_documents({})
-print('Count after insertion:',cnt2)
-
-
-            
+        while True:
+            cnt = collection.count_documents({})
+            if cnt >= 5000:
+                print("Maximum limit Reached")
+            documents = notins_lnk(collection)
+            all_crawled = True
+            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+                futures = []
+                try:
+                    for document in documents:
+                        all_crawled = False
+                        futures.append(executor.submit(crawl, document, collection))
+                    for future in concurrent.futures.as_completed(futures):
+                        future.result()
+                except Exception as error:
+                    print(error)
+                    break
+            if all_crawled:
+                print("All links are crawled!")
+                break
