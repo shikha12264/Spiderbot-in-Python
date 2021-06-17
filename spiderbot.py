@@ -29,7 +29,7 @@ def db_conn():
     #count_documents is a method to get the count of documents under
     #collections(records)
 
-
+#function to save html content in a file
 def write_html(lnk):
     response = requests.get(lnk)                                         
     f = open("Html", "wb")                                               #Open a new file for writing
